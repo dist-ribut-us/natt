@@ -1,5 +1,5 @@
-// Internet Gateway Device Protocol handles communication with a uPNP device to
-// open an external port for NAT Traversal.
+// Package igdp implements then Internet Gateway Device Protocol to handle
+// communication with a uPNP device to open an external port for NAT Traversal.
 package igdp
 
 import (
@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dist-ribut-us/rnet"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"strings"
@@ -29,8 +28,8 @@ var Control string
 // Location to request device description
 var Location string
 
-// NoLocalIP error will occure when a local IP cannot be determined
-var NoLocalIP = errors.New("No local IP")
+// ErrNoLocalIP error will occure when a local IP cannot be determined
+var ErrNoLocalIP = errors.New("No local IP")
 
 const searchMessage = "M-SEARCH * HTTP/1.1\r\n" +
 	"HOST: 239.255.255.250:1900\r\n" +
@@ -46,7 +45,7 @@ func Setup() error {
 		if localIPs := rnet.GetLocalIPs(); len(localIPs) > 0 {
 			LocalIP = localIPs[0]
 		} else {
-			return NoLocalIP
+			return ErrNoLocalIP
 		}
 	}
 
@@ -95,7 +94,7 @@ func Setup() error {
 	return getDeviceDescription()
 }
 
-type Service struct {
+type service struct {
 	XMLName     xml.Name `xml:"service"`
 	Type        string   `xml:"serviceType"`
 	ID          string   `xml:"serviceId"`
@@ -115,14 +114,14 @@ func getDeviceDescription() error {
 	if err != nil {
 		return err
 	}
-	iter := newXmlIter(decoder)
+	iter := newXMLIter(decoder)
 	for iter.next() {
 		if iter.t.Name.Local == "service" {
-			service := &Service{}
-			decoder.DecodeElement(service, iter.t)
-			if strings.HasSuffix(service.Type, "Connection:1") {
-				ControlURL = service.ControlURL
-				Control = service.Type
+			s := &service{}
+			decoder.DecodeElement(s, iter.t)
+			if strings.HasSuffix(s.Type, "Connection:1") {
+				ControlURL = s.ControlURL
+				Control = s.Type
 				break
 			}
 		} else if iter.t.Name.Local == "URLBase" {
@@ -170,7 +169,7 @@ func GetExternalIP() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	iter := newXmlIter(decoder)
+	iter := newXMLIter(decoder)
 	for iter.next() {
 		if iter.t.Name.Local == "NewExternalIPAddress" {
 			t, _ := decoder.Token()
@@ -215,12 +214,6 @@ func AddPortMapping(localPort, remotePort int) error {
 		return errors.New(resp.Status)
 	}
 
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println(string(b))
 	return nil
 }
 
@@ -244,7 +237,7 @@ type xmlIter struct {
 	err error
 }
 
-func newXmlIter(d *xml.Decoder) *xmlIter {
+func newXMLIter(d *xml.Decoder) *xmlIter {
 	return &xmlIter{d: d}
 }
 
