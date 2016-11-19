@@ -23,17 +23,20 @@ func main() {
 		fmt.Println(err)
 		return
 	}
+
+	srv, err := rnet.RunNew(":55555", &packeter{})
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
 	externalIp, err := igdp.GetExternalIP()
-	igdp.AddPortMapping(1234, 1234)
+	igdp.AddPortMapping(srv.Port(), srv.Port())
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	fmt.Println("Listening on", externalIp, ":1234")
-	_, err = rnet.RunNew(":1234", &packeter{})
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	fmt.Println("Listening on", externalIp, ":", srv.Port())
+
 	time.Sleep(time.Minute)
 }

@@ -183,9 +183,7 @@ func GetExternalIP() (string, error) {
 	return "", iter.err
 }
 
-// AddPortMapping maps a local port to a port on the ExternalIP.
-func AddPortMapping(localPort, remotePort int) error {
-	bodyStr := `<m:AddPortMapping xmlns:m="urn:schemas-upnp-org:service:WANPPPConnection:1">
+var bodyStr = `<m:AddPortMapping xmlns:m="urn:schemas-upnp-org:service:WANPPPConnection:1">
 <NewRemoteHost></NewRemoteHost>
 <NewExternalPort>%d</NewExternalPort>
 <NewProtocol>UDP</NewProtocol>
@@ -195,6 +193,9 @@ func AddPortMapping(localPort, remotePort int) error {
 <NewPortMappingDescription>upnpbind</NewPortMappingDescription>
 <NewLeaseDuration>0</NewLeaseDuration>
 </m:AddPortMapping>`
+
+// AddPortMapping maps a local port to a port on the ExternalIP.
+func AddPortMapping(localPort, remotePort int) error {
 	bodyStr = fmt.Sprintf(bodyStr, remotePort, localPort, LocalIP)
 	bodyStr = fmt.Sprintf(soapEnv, bodyStr)
 	req, err := http.NewRequest("POST", URLBase+ControlURL, strings.NewReader(bodyStr))
