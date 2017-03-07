@@ -4,14 +4,21 @@ package igdp
 
 import (
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"github.com/dist-ribut-us/rnet"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"strings"
 	"time"
 )
+
+// this allows errors to be defined as const instead of var
+type defineErr string
+
+func (d defineErr) Error() string {
+	return string(d)
+}
 
 // LocalIP address
 var LocalIP string
@@ -29,7 +36,7 @@ var Control string
 var Location string
 
 // ErrNoLocalIP error will occure when a local IP cannot be determined
-var ErrNoLocalIP = errors.New("No local IP")
+const ErrNoLocalIP = defineErr("No local IP")
 
 const searchMessage = "M-SEARCH * HTTP/1.1\r\n" +
 	"HOST: 239.255.255.250:1900\r\n" +
@@ -154,6 +161,16 @@ var ExternalIP string
 // GetExternalIP will populate ExternalIP. The value is also returned, along
 // with an error.
 func GetExternalIP() (string, error) {
+	if Control == "" {
+		resp, err := http.Get("http://myexternalip.com/raw")
+		if err != nil {
+			return "", err
+		}
+		defer resp.Body.Close()
+		b, err := ioutil.ReadAll(resp.Body)
+		return strings.TrimSpace(string(b)), err
+	}
+
 	bodyStr := fmt.Sprintf(`<m:GetExternalIPAddress xmlns:m="%s"></m:GetExternalIPAddress>`, Control)
 	bodyStr = fmt.Sprintf(soapEnv, bodyStr)
 	req, err := http.NewRequest("POST", URLBase+ControlURL, strings.NewReader(bodyStr))
@@ -175,7 +192,7 @@ func GetExternalIP() (string, error) {
 			t, _ := decoder.Token()
 			if c, ok := t.(xml.CharData); ok {
 				ExternalIP = string(c)
-				return ExternalIP, nil
+				return strings.TrimSpace(ExternalIP), nil
 			}
 			break
 		}
@@ -183,7 +200,7 @@ func GetExternalIP() (string, error) {
 	return "", iter.err
 }
 
-var bodyStr = `<m:AddPortMapping xmlns:m="urn:schemas-upnp-org:service:WANPPPConnection:1">
+const bodyStr = `<m:AddPortMapping xmlns:m="urn:schemas-upnp-org:service:WANPPPConnection:1">
 <NewRemoteHost></NewRemoteHost>
 <NewExternalPort>%d</NewExternalPort>
 <NewProtocol>UDP</NewProtocol>
@@ -195,27 +212,29 @@ var bodyStr = `<m:AddPortMapping xmlns:m="urn:schemas-upnp-org:service:WANPPPCon
 </m:AddPortMapping>`
 
 // AddPortMapping maps a local port to a port on the ExternalIP.
-func AddPortMapping(localPort, remotePort int) error {
-	bodyStr = fmt.Sprintf(bodyStr, remotePort, localPort, LocalIP)
-	bodyStr = fmt.Sprintf(soapEnv, bodyStr)
-	req, err := http.NewRequest("POST", URLBase+ControlURL, strings.NewReader(bodyStr))
+func AddPortMapping(localPort, remotePort int) (string, error) {
+	body := fmt.Sprintf(bodyStr, remotePort, localPort, LocalIP)
+	body = fmt.Sprintf(soapEnv, body)
+	req, err := http.NewRequest("POST", URLBase+ControlURL, strings.NewReader(body))
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("SOAPAction", `"`+Control+`#AddPortMapping"`)
 	req.Header.Set("Content-Type", "text/xml")
 	req.Header.Set("Connection", "Close")
-	req.Header.Set("Content-Length", fmt.Sprintf("%d", len(bodyStr)))
+	req.Header.Set("Content-Length", fmt.Sprintf("%d", len(body)))
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return err
-	}
-	if resp.StatusCode != 200 {
-		return errors.New(resp.Status)
+		return "", err
 	}
 
-	return nil
+	r, _ := ioutil.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		return string(r), defineErr(resp.Status)
+	}
+
+	return string(r), nil
 }
 
 // xmlResponse takes an http Request that expects xml in the body and returns an
@@ -226,7 +245,7 @@ func xmlResponse(req *http.Request) (*xml.Decoder, error) {
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
-		return nil, errors.New(resp.Status)
+		return nil, defineErr(resp.Status)
 	}
 	return xml.NewDecoder(resp.Body), nil
 }
