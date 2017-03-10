@@ -5,6 +5,7 @@ package igdp
 import (
 	"encoding/xml"
 	"fmt"
+	"github.com/dist-ribut-us/errors"
 	"github.com/dist-ribut-us/rnet"
 	"io/ioutil"
 	"net"
@@ -12,13 +13,6 @@ import (
 	"strings"
 	"time"
 )
-
-// this allows errors to be defined as const instead of var
-type defineErr string
-
-func (d defineErr) Error() string {
-	return string(d)
-}
 
 // LocalIP address
 var LocalIP string
@@ -36,7 +30,7 @@ var Control string
 var Location string
 
 // ErrNoLocalIP error will occure when a local IP cannot be determined
-const ErrNoLocalIP = defineErr("No local IP")
+const ErrNoLocalIP = errors.String("No local IP")
 
 const searchMessage = "M-SEARCH * HTTP/1.1\r\n" +
 	"HOST: 239.255.255.250:1900\r\n" +
@@ -212,7 +206,7 @@ const bodyStr = `<m:AddPortMapping xmlns:m="urn:schemas-upnp-org:service:WANPPPC
 </m:AddPortMapping>`
 
 // AddPortMapping maps a local port to a port on the ExternalIP.
-func AddPortMapping(localPort, remotePort int) (string, error) {
+func AddPortMapping(localPort, remotePort rnet.Port) (string, error) {
 	body := fmt.Sprintf(bodyStr, remotePort, localPort, LocalIP)
 	body = fmt.Sprintf(soapEnv, body)
 	req, err := http.NewRequest("POST", URLBase+ControlURL, strings.NewReader(body))
@@ -231,7 +225,7 @@ func AddPortMapping(localPort, remotePort int) (string, error) {
 
 	r, _ := ioutil.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
-		return string(r), defineErr(resp.Status)
+		return string(r), errors.String(resp.Status)
 	}
 
 	return string(r), nil
@@ -245,7 +239,7 @@ func xmlResponse(req *http.Request) (*xml.Decoder, error) {
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
-		return nil, defineErr(resp.Status)
+		return nil, errors.String(resp.Status)
 	}
 	return xml.NewDecoder(resp.Body), nil
 }
